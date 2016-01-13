@@ -1,0 +1,108 @@
+// Song protobuf3 definition
+
+syntax = "proto3";
+
+// option go_package = "song";
+package song;
+
+// The song service definition.
+service SongSrv {
+
+  rpc Add (SongObj) returns (ActionStatus) {}
+  rpc Modify (SongObj) returns (ActionStatus) {}
+  rpc Delete (SongObj) returns (ActionStatus) {}
+  rpc Get (SongObj) returns (SongObj) {}
+  //rpc Filter (SongSearch) returns (stream SongObj) {}
+}
+
+// The request message containing the user's name.
+message SongObj {
+  string id = 1; // the song ID
+  string uri = 2; // full URI path to song
+  enum MediaType {
+      // TODO - Check in taglib code if there are any additional types/suffixes
+      Unknown = 0; // Unknown
+      Asf = 1; // windows media audio
+      Flac = 2; // Flac
+      Mp4 = 3; // MP4 AAC
+      Mpc = 4; // MPC or musepack
+      Mpeg = 5; // MP3 (Not technically correct, only layer 3)
+      OggFlac = 6; // Ogg Flac
+      OggSpeex = 7; // Ogg Speex
+      OggVorbis = 8; // Ogg Vorbis
+      Aiff = 9; // aiff
+      Wav = 10; // wav
+      TrueAudio = 11; // TrueAudio
+      Cdda = 12; // CDDA
+      OggOpus = 13; // Ogg Opus
+      Stream = 99; // Stream
+  }
+  MediaType mediatype = 3;
+  bool unavailable = 4; // Whether the song does not exist on the file system anymore, but is still stored in the database so as to remember the user's metadata
+  bool valid = 5; // bool in case file is not a valid audio file.
+  Tags tags = 6;
+  AudioProperties audioproperties = 7;
+  FileInfo fileinfo = 8;
+  Stats tagstats = 9;
+  Stats playerstats = 10;
+  DuplicateHint duplicatehint = 11;
+  bytes data = 12;
+}
+
+message AudioProperties {
+    int32 bitrate = 1; // the bitrate of the song in kb/s
+    int32 samplerate = 2; // the sample rate of the song in Hz
+    int32 channels = 3; // the number of channels (mono/stereo) in the audio stream
+    int32 length = 4; // the length of the song in seconds (TODO - check Duration)
+    // map<string, Any> extra = 5; TODO - Add extended extra properties
+}
+
+message FileInfo {
+    string name = 1; // song basename/filename
+    string path = 2; // song path basedir
+    string suffix = 3; // song suffix: mp3
+    int64 filesize = 4; // song file size
+    string mtime = 5; // song last modification time
+    string ctime = 6; // song creation time
+    // map<string, Any> extra = 6; TODO - Add extended extra properties
+}
+
+message DuplicateHint {
+    string name = 1; // song lowered/striped/trancate filename
+    string title = 2; // a lowered/striped/trancate string with this tag's title
+    string artist = 3; // a lowered/striped/trancate string with this tag's artist
+    string album = 4; // a lowered/striped/trancate string with this tag's album name
+}
+
+message Stats {
+
+    int32 playcount = 1; // song playied counter
+    string lastplayed = 2; // song last play datetime
+    int32 skipcount = 3; // number of skip
+    int32 rating = 4; // user song rating
+    int32 score = 5; // user song scoring
+    // map<string, Any> extra = 6; TODO - Add extended extra properties
+}
+
+message Tags {
+    string title = 1; // a string with this tag's title
+    string artist = 2; // a string with this tag's artist
+    string album = 3; // a string with this tag's album name
+    string comment = 4; // a string with this tag's comment
+    string genre = 5; // a string with this tag's genre
+    int32 year = 6; // the tag's year or 0 if year is not set
+    int32 track = 7; // the tag's track number or 0 if track number is not set
+    // map<string, Any> extra = 8; TODO - Add extended extra info
+}
+
+// The response message containing the song action status
+message ActionStatus {
+  string id = 1; // action ID
+  enum Status {
+      Failed = 0; // failed to perform action
+      Spawn = 1; // action task was spwaned
+      Done = 2; // action was completed successfully
+  }
+  Status status = 2;
+  string error = 3; // action error message
+}
