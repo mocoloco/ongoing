@@ -13,10 +13,10 @@ service SongSrv {
 
   rpc Add (SongObj) returns (SongResponce) {}
   rpc Adds (stream SongObj) returns (stream SongResponce) {}
-  rpc Modify (SongObj) returns (SongResponce) {}
-  rpc Delete (SongObj) returns (SongResponce) {}
+  //rpc Modify (SongObj) returns (SongResponce) {}
+  //rpc Delete (SongObj) returns (SongResponce) {}
   rpc Get (SongObj) returns (SongObj) {}
-  rpc Filter (SongQuery) returns (stream SongObj) {}
+  //rpc Filter (SongQuery) returns (stream SongObj) {}
 }
 
 // The request message containing the user's name.
