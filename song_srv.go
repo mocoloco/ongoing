@@ -62,6 +62,7 @@ func (s *SongSrvServer) Adds(stream pb.SongSrv_AddsServer) error {
 // Get: get one song from DB.
 func (s *SongSrvServer) Get(ctx context.Context, SongObj *pb.SongObj) (*pb.SongObj, error) {
 
+	grpclog.Printf("SERVER: Recive Get Request for Song Id %v\n", SongObj.Id)
 	for _, song := range s.savedSongs {
 		if song.Id == SongObj.Id {
 			return &song, nil
@@ -74,6 +75,7 @@ func (s *SongSrvServer) Get(ctx context.Context, SongObj *pb.SongObj) (*pb.SongO
 // Modify: modify one song from DB.
 func (s *SongSrvServer) Modify(ctx context.Context, SongObj *pb.SongObj) (*pb.SongResponce, error) {
 
+	grpclog.Printf("SERVER: Recive Modify Request for Song Id %v\n", SongObj.Id)
 	for i, song := range s.savedSongs {
 		if song.Id == SongObj.Id {
 			s.savedSongs = append(s.savedSongs[:i], s.savedSongs[i+1:]...)
@@ -88,6 +90,7 @@ func (s *SongSrvServer) Modify(ctx context.Context, SongObj *pb.SongObj) (*pb.So
 // Delete: delete one song from DB.
 func (s *SongSrvServer) Delete(ctx context.Context, SongObj *pb.SongObj) (*pb.SongResponce, error) {
 
+	grpclog.Printf("SERVER: Recive Delete Request for Song Id %v\n", SongObj.Id)
 	for i, song := range s.savedSongs {
 		if song.Id == SongObj.Id {
 			s.savedSongs = append(s.savedSongs[:i], s.savedSongs[i+1:]...)
@@ -114,6 +117,18 @@ func uniq_id(SongsObj []pb.SongObj, client_id int) []pb.SongObj {
 	return _SongsObj
 }
 
+func motivate(action string, list_of_chan []chan map[string][]pb.SongObj, wg *sync.WaitGroup, songs []pb.SongObj) {
+
+	for _, ch := range list_of_chan {
+		wg.Add(1)
+		_map := make(map[string][]pb.SongObj)
+		_map[action] = songs
+		ch <- _map
+	}
+	wg.Wait()
+
+}
+
 // add_song add one song to DB.
 func add_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 
@@ -123,12 +138,12 @@ func add_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 	if err != nil {
 		grpclog.Fatalf("CLIENT-%v: %v.add_song(_) = _, %v: ", client_id, client, err)
 	}
-	grpclog.Printf("CLIENT-%v: Get Response from Server that Song id %v was Add succesfully to DB\n", client_id, status.Id)
+	grpclog.Printf("CLIENT-%v: Get Response from Server that Song id %v was Add succesfully to DB\n\n", client_id, status.Id)
 }
 
 // add_songs add one or more songs to DB.
 func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
-
+	grpclog.Printf("CLIENT-%v: Call to Adds Function with list of %v SongObj\n", client_id, len(SongsObj))
 	songs := uniq_id(SongsObj, client_id)
 	stream, err := client.Adds(context.Background())
 	if err != nil {
@@ -146,7 +161,7 @@ func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 			if err != nil {
 				grpclog.Fatalf("CLIENT-%v: Failed to add song Id %v to DB : %v", client_id, in.Id, err)
 			}
-			grpclog.Printf("CLIENT-%v: Successful add song id %v to DB\n", client_id, in.Id)
+			grpclog.Printf("CLIENT-%v: Successful add song id %v to DB\n\n", client_id, in.Id)
 		}
 	}()
 	for _, song := range songs {
@@ -162,12 +177,12 @@ func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 func get_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 
 	SongObj := uniq_id(SongsObj, client_id)[0]
-	grpclog.Printf("CLIENT-%v: Request Song Id %v\n", client_id, SongObj.Id)
+	grpclog.Printf("CLIENT-%v: Send Get Request for Song Id %v\n", client_id, SongObj.Id)
 	song, err := client.Get(context.Background(), &SongObj)
 	if err != nil {
 		grpclog.Printf("CLIENT-%v: %v.get_song(_) = _, %v: \n", client_id, client, err)
 	} else {
-		grpclog.Printf("CLIENT-%v: Successful Get Song Obj %v\n", client_id, song)
+		grpclog.Printf("CLIENT-%v: Successful Get Song Obj %v\n\n", client_id, song)
 	}
 }
 
@@ -176,11 +191,11 @@ func modify_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) 
 
 	SongObj := uniq_id(SongsObj, client_id)[0]
 	grpclog.Printf("CLIENT-%v: Request Modify Song Id %v\n", client_id, SongObj.Id)
-	song, err := client.Modify(context.Background(), &SongObj)
+	status, err := client.Modify(context.Background(), &SongObj)
 	if err != nil {
 		grpclog.Fatalf("%v.modify_song(_) = _, %v: ", client, err)
 	}
-	grpclog.Printf("CLIENT-%v: Successful Modify Song Obj %v\n", client_id, song)
+	grpclog.Printf("CLIENT-%v: Successful Modify Song Obj %v\n\n", client_id, status)
 }
 
 // delete_song modify one song by id.
@@ -188,11 +203,11 @@ func delete_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) 
 
 	SongObj := uniq_id(SongsObj, client_id)[0]
 	grpclog.Printf("CLIENT-%v: Request Delete Song Id %v\n", client_id, SongObj.Id)
-	song, err := client.Delete(context.Background(), &SongObj)
+	status, err := client.Delete(context.Background(), &SongObj)
 	if err != nil {
 		grpclog.Fatalf("%v.modify_song(_) = _, %v: ", client, err)
 	}
-	grpclog.Printf("CLIENT-%v: Successful Delete Song Obj %v\n", client_id, song)
+	grpclog.Printf("CLIENT-%v: Successful Delete Song Obj %v\n\n", client_id, status)
 }
 
 func start_client(client_id int, map_cahn chan map[string][]pb.SongObj, wg *sync.WaitGroup) {
@@ -263,14 +278,7 @@ func main() {
 			Tags: &pb.Tags{Title: "Lazarus", Artist: "David Bowie", Album: "Herors"}, Id: "1",
 		},
 	}
-
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["add_song"] = songs
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("add_song", list_of_chan, &wg, songs)
 
 	// send add_songs and 3 SongObj to client channel
 	grpclog.Println("MAIN: CALL TO add_songs with 3 SongObj")
@@ -285,24 +293,11 @@ func main() {
 			Tags: &pb.Tags{Title: "Clocks", Artist: "Coldplay", Album: "Magic"}, Id: "4",
 		},
 	}
-
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["add_songs"] = songs
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("add_songs", list_of_chan, &wg, songs)
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["get_song"] = []pb.SongObj{{Id: "1"}}
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("get_song", list_of_chan, &wg, []pb.SongObj{{Id: "1"}})
 
 	// send modify_song and 1 SongObj to client channel
 	songs = []pb.SongObj{
@@ -311,41 +306,18 @@ func main() {
 		},
 	}
 	grpclog.Println("MAIN: CALL TO modify_song with 1 SongObj")
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["modify_song"] = songs
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("modify_song", list_of_chan, &wg, songs)
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["get_song"] = []pb.SongObj{{Id: "1"}}
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("get_song", list_of_chan, &wg, []pb.SongObj{{Id: "1"}})
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO delete_song with 1 SongObj")
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["delete_song"] = []pb.SongObj{{Id: "1"}}
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("delete_song", list_of_chan, &wg, []pb.SongObj{{Id: "1"}})
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
-	for _, ch := range list_of_chan {
-		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
-		_map["get_song"] = []pb.SongObj{{Id: "1"}}
-		ch <- _map
-	}
-	wg.Wait()
+	motivate("get_song", list_of_chan, &wg, []pb.SongObj{{Id: "1"}})
+
 }
