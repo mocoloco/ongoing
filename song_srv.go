@@ -25,6 +25,14 @@ type SongSrvServer struct {
 	savedSongs []pb.SongObj
 }
 
+// generate new server
+func newServer() *SongSrvServer {
+
+	s := new(SongSrvServer)
+	return s
+}
+
+// Add: add one song to DB.
 func (s *SongSrvServer) Add(ctx context.Context, song_obj *pb.SongObj) (*pb.SongResponce, error) {
 
 	grpclog.Printf("SERVER: Get add song request with Id %v\n", song_obj.Id)
@@ -32,6 +40,7 @@ func (s *SongSrvServer) Add(ctx context.Context, song_obj *pb.SongObj) (*pb.Song
 	return &pb.SongResponce{song_obj.Id}, nil
 }
 
+// Adds: add one or more songs to DB.
 func (s *SongSrvServer) Adds(stream pb.SongSrv_AddsServer) error {
 
 	for {
@@ -50,6 +59,7 @@ func (s *SongSrvServer) Adds(stream pb.SongSrv_AddsServer) error {
 	}
 }
 
+// Get: get one song from DB.
 func (s *SongSrvServer) Get(ctx context.Context, SongObj *pb.SongObj) (*pb.SongObj, error) {
 
 	for _, song := range s.savedSongs {
@@ -58,13 +68,34 @@ func (s *SongSrvServer) Get(ctx context.Context, SongObj *pb.SongObj) (*pb.SongO
 		}
 	}
 	// No SongObj was found, return an unnamed feature
-	return &pb.SongObj{Id: "-1"}, nil
+	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
 }
 
-func newServer() *SongSrvServer {
+// Modify: modify one song from DB.
+func (s *SongSrvServer) Modify(ctx context.Context, SongObj *pb.SongObj) (*pb.SongResponce, error) {
 
-	s := new(SongSrvServer)
-	return s
+	for i, song := range s.savedSongs {
+		if song.Id == SongObj.Id {
+			s.savedSongs = append(s.savedSongs[:i], s.savedSongs[i+1:]...)
+			s.savedSongs = append(s.savedSongs, *SongObj)
+			return &pb.SongResponce{SongObj.Id}, nil
+		}
+	}
+	// No SongObj was found, return an unnamed feature
+	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
+}
+
+// Delete: delete one song from DB.
+func (s *SongSrvServer) Delete(ctx context.Context, SongObj *pb.SongObj) (*pb.SongResponce, error) {
+
+	for i, song := range s.savedSongs {
+		if song.Id == SongObj.Id {
+			s.savedSongs = append(s.savedSongs[:i], s.savedSongs[i+1:]...)
+			return &pb.SongResponce{SongObj.Id}, nil
+		}
+	}
+	// No SongObj was found, return an unnamed feature
+	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
 }
 
 //!!!!!!!!!!Client Api !!!!!!!!!!!!!!!!!
@@ -134,9 +165,34 @@ func get_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 	grpclog.Printf("CLIENT-%v: Request Song Id %v\n", client_id, SongObj.Id)
 	song, err := client.Get(context.Background(), &SongObj)
 	if err != nil {
-		grpclog.Fatalf("%v.get_song(_) = _, %v: ", client, err)
+		grpclog.Printf("CLIENT-%v: %v.get_song(_) = _, %v: \n", client_id, client, err)
+	} else {
+		grpclog.Printf("CLIENT-%v: Successful Get Song Obj %v\n", client_id, song)
 	}
-	grpclog.Printf("CLIENT-%v: Successful Get Song Obj %v\n", client_id, song)
+}
+
+// modify_song modify one song by id.
+func modify_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
+
+	SongObj := uniq_id(SongsObj, client_id)[0]
+	grpclog.Printf("CLIENT-%v: Request Modify Song Id %v\n", client_id, SongObj.Id)
+	song, err := client.Modify(context.Background(), &SongObj)
+	if err != nil {
+		grpclog.Fatalf("%v.modify_song(_) = _, %v: ", client, err)
+	}
+	grpclog.Printf("CLIENT-%v: Successful Modify Song Obj %v\n", client_id, song)
+}
+
+// delete_song modify one song by id.
+func delete_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
+
+	SongObj := uniq_id(SongsObj, client_id)[0]
+	grpclog.Printf("CLIENT-%v: Request Delete Song Id %v\n", client_id, SongObj.Id)
+	song, err := client.Delete(context.Background(), &SongObj)
+	if err != nil {
+		grpclog.Fatalf("%v.modify_song(_) = _, %v: ", client, err)
+	}
+	grpclog.Printf("CLIENT-%v: Successful Delete Song Obj %v\n", client_id, song)
 }
 
 func start_client(client_id int, map_cahn chan map[string][]pb.SongObj, wg *sync.WaitGroup) {
@@ -161,6 +217,12 @@ func start_client(client_id int, map_cahn chan map[string][]pb.SongObj, wg *sync
 				wg.Done()
 			} else if SongObj, ok := action["get_song"]; ok {
 				get_song(client, SongObj, client_id)
+				wg.Done()
+			} else if SongObj, ok := action["modify_song"]; ok {
+				modify_song(client, SongObj, client_id)
+				wg.Done()
+			} else if SongObj, ok := action["delete_song"]; ok {
+				delete_song(client, SongObj, client_id)
 				wg.Done()
 			}
 		}
@@ -232,7 +294,52 @@ func main() {
 	}
 	wg.Wait()
 
-	// send add_songs and 3 SongObj to client channel
+	// send get_song with 1 SongObj id to client channel
+	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
+	for _, ch := range list_of_chan {
+		wg.Add(1)
+		_map := make(map[string][]pb.SongObj)
+		_map["get_song"] = []pb.SongObj{{Id: "1"}}
+		ch <- _map
+	}
+	wg.Wait()
+
+	// send modify_song and 1 SongObj to client channel
+	songs = []pb.SongObj{
+		{
+			Tags: &pb.Tags{Title: "mocoloco", Artist: "David Bowie", Album: "Herors"}, Id: "1",
+		},
+	}
+	grpclog.Println("MAIN: CALL TO modify_song with 1 SongObj")
+	for _, ch := range list_of_chan {
+		wg.Add(1)
+		_map := make(map[string][]pb.SongObj)
+		_map["modify_song"] = songs
+		ch <- _map
+	}
+	wg.Wait()
+
+	// send get_song with 1 SongObj id to client channel
+	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
+	for _, ch := range list_of_chan {
+		wg.Add(1)
+		_map := make(map[string][]pb.SongObj)
+		_map["get_song"] = []pb.SongObj{{Id: "1"}}
+		ch <- _map
+	}
+	wg.Wait()
+
+	// send get_song with 1 SongObj id to client channel
+	grpclog.Println("MAIN: CALL TO delete_song with 1 SongObj")
+	for _, ch := range list_of_chan {
+		wg.Add(1)
+		_map := make(map[string][]pb.SongObj)
+		_map["delete_song"] = []pb.SongObj{{Id: "1"}}
+		ch <- _map
+	}
+	wg.Wait()
+
+	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
 	for _, ch := range list_of_chan {
 		wg.Add(1)
