@@ -1,8 +1,5 @@
 // Song protobuf3 definition
 
-
-
-
 syntax = "proto3";
 
 // option go_package = "song";

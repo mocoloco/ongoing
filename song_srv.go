@@ -3,16 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	pb "github.com/ongoing"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 	"io"
 	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+
+	pb "./proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 )
 
 var (
@@ -50,7 +51,7 @@ func regex(s, re string) bool {
 // Add: add one song to DB.
 func (s *SongSrvServer) Add(ctx context.Context, song_obj *pb.SongObj) (*pb.SongResponce, error) {
 
-	grpclog.Printf("SERVER: Get add song request with Id %v\n", song_obj.Id)
+	grpclog.Printf("SERVER: Add song request with Id %v\n", song_obj.Id)
 	s.savedSongs = append(s.savedSongs, *song_obj)
 	return &pb.SongResponce{song_obj.Id}, nil
 }
@@ -84,7 +85,7 @@ func (s *SongSrvServer) Get(ctx context.Context, SongObj *pb.SongObj) (*pb.SongO
 		}
 	}
 	// No SongObj was found, return an unnamed feature
-	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
+	return nil, fmt.Errorf("No such song id: %v", SongObj.Id)
 }
 
 // Modify: modify one song from DB.
@@ -99,7 +100,7 @@ func (s *SongSrvServer) Modify(ctx context.Context, SongObj *pb.SongObj) (*pb.So
 		}
 	}
 	// No SongObj was found, return an unnamed feature
-	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
+	return nil, fmt.Errorf("No such song id: %v", SongObj.Id)
 }
 
 // Delete: delete one song from DB.
@@ -113,7 +114,7 @@ func (s *SongSrvServer) Delete(ctx context.Context, SongObj *pb.SongObj) (*pb.So
 		}
 	}
 	// No SongObj was found, return an unnamed feature
-	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
+	return nil, fmt.Errorf("No such song id: %v", SongObj.Id)
 }
 
 func (s *SongSrvServer) Filter(query *pb.SongQuery, stream pb.SongSrv_FilterServer) error {
@@ -183,7 +184,7 @@ func add_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 	if err != nil {
 		grpclog.Fatalf("CLIENT-%v: %v.add_song(_) = _, %v: ", client_id, client, err)
 	}
-	grpclog.Printf("CLIENT-%v: Get Response from Server that Song id %v was Add succesfully to DB\n\n", client_id, status.Id)
+	grpclog.Printf("CLIENT-%v: Got Response from Server that Song id %v was Add succesfully to DB\n\n", client_id, status.Id)
 }
 
 // add_songs add one or more songs to DB.
@@ -204,9 +205,9 @@ func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 				return
 			}
 			if err != nil {
-				grpclog.Fatalf("CLIENT-%v: Failed to add song Id %v to DB : %v", client_id, in.Id, err)
+				grpclog.Fatalf("CLIENT-%v: Failed to add song Id %v: %v", client_id, in.Id, err)
 			}
-			grpclog.Printf("CLIENT-%v: Successful add song id %v to DB\n", client_id, in.Id)
+			grpclog.Printf("CLIENT-%v: Successful add song id %v\n", client_id, in.Id)
 		}
 	}()
 	for _, song := range songs {
