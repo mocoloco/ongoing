@@ -9,7 +9,9 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"io"
 	"net"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -30,6 +32,19 @@ func newServer() *SongSrvServer {
 
 	s := new(SongSrvServer)
 	return s
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+func match(s1, s2 string) bool {
+	return s1 == s2
+}
+
+func regex(s, re string) bool {
+	var validSong = regexp.MustCompile(re)
+	return validSong.MatchString(s)
 }
 
 // Add: add one song to DB.
@@ -101,6 +116,36 @@ func (s *SongSrvServer) Delete(ctx context.Context, SongObj *pb.SongObj) (*pb.So
 	return nil, fmt.Errorf("DB missing song id %v", SongObj.Id)
 }
 
+func (s *SongSrvServer) Filter(query *pb.SongQuery, stream pb.SongSrv_FilterServer) error {
+
+	grpclog.Printf("SERVER: Recive Filter Request : %v\n", query)
+	var triger func(string, string) bool
+	if query.SearchType == 0 {
+		triger = regex
+	} else if query.SearchType == 2 {
+		triger = contains
+	} else if query.SearchType == 3 {
+		triger = match
+	}
+
+	for _, song := range s.savedSongs {
+		var str string
+		if query.SearchField == 0 {
+			str = song.Tags.Title
+		} else if query.SearchField == 1 {
+			str = song.Tags.Artist
+		} else if query.SearchField == 2 {
+			str = song.Tags.Album
+		}
+		if triger(str, query.Search) {
+			if err := stream.Send(&song); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 //!!!!!!!!!!Client Api !!!!!!!!!!!!!!!!!
 
 // return uniq id for each SongObj
@@ -117,11 +162,11 @@ func uniq_id(SongsObj []pb.SongObj, client_id int) []pb.SongObj {
 	return _SongsObj
 }
 
-func motivate(action string, list_of_chan []chan map[string][]pb.SongObj, wg *sync.WaitGroup, songs []pb.SongObj) {
+func motivate(action string, list_of_chan []chan map[string]interface{}, wg *sync.WaitGroup, songs interface{}) {
 
 	for _, ch := range list_of_chan {
 		wg.Add(1)
-		_map := make(map[string][]pb.SongObj)
+		_map := make(map[string]interface{})
 		_map[action] = songs
 		ch <- _map
 	}
@@ -161,7 +206,7 @@ func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 			if err != nil {
 				grpclog.Fatalf("CLIENT-%v: Failed to add song Id %v to DB : %v", client_id, in.Id, err)
 			}
-			grpclog.Printf("CLIENT-%v: Successful add song id %v to DB\n\n", client_id, in.Id)
+			grpclog.Printf("CLIENT-%v: Successful add song id %v to DB\n", client_id, in.Id)
 		}
 	}()
 	for _, song := range songs {
@@ -171,6 +216,7 @@ func add_songs(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) {
 	}
 	stream.CloseSend()
 	<-waitc
+	grpclog.Printf("\n")
 }
 
 // get_song get one song by id.
@@ -210,7 +256,28 @@ func delete_song(client pb.SongSrvClient, SongsObj []pb.SongObj, client_id int) 
 	grpclog.Printf("CLIENT-%v: Successful Delete Song Obj %v\n\n", client_id, status)
 }
 
-func start_client(client_id int, map_cahn chan map[string][]pb.SongObj, wg *sync.WaitGroup) {
+// filter_songs lists all the song within the given query.
+func filter_songs(client pb.SongSrvClient, query pb.SongQuery, client_id int) {
+
+	grpclog.Printf("CLIENT-%v: Request Filter Song Id %v\n", client_id, query)
+	stream, err := client.Filter(context.Background(), &query)
+	if err != nil {
+		grpclog.Fatalf("CLIENT-%v: %v.filter_songs(_) = _, %v", client_id, client, err)
+	}
+	for {
+		song, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			grpclog.Fatalf("CLIENT-%v: %v.filter_songs(_) = _, %v", client_id, client, err)
+		}
+		grpclog.Printf("CLIENT-%v: Get Song Obj %v\n", client_id, song)
+	}
+	grpclog.Printf("\n")
+}
+
+func start_client(client_id int, map_cahn chan map[string]interface{}, wg *sync.WaitGroup) {
 
 	var dial_opts []grpc.DialOption
 	dial_opts = append(dial_opts, grpc.WithInsecure())
@@ -225,19 +292,22 @@ func start_client(client_id int, map_cahn chan map[string][]pb.SongObj, wg *sync
 		select {
 		case action := <-map_cahn:
 			if SongObj, ok := action["add_song"]; ok {
-				add_song(client, SongObj, client_id)
+				add_song(client, SongObj.([]pb.SongObj), client_id)
 				wg.Done()
 			} else if SongsObj, ok := action["add_songs"]; ok {
-				add_songs(client, SongsObj, client_id)
+				add_songs(client, SongsObj.([]pb.SongObj), client_id)
 				wg.Done()
 			} else if SongObj, ok := action["get_song"]; ok {
-				get_song(client, SongObj, client_id)
+				get_song(client, SongObj.([]pb.SongObj), client_id)
 				wg.Done()
 			} else if SongObj, ok := action["modify_song"]; ok {
-				modify_song(client, SongObj, client_id)
+				modify_song(client, SongObj.([]pb.SongObj), client_id)
 				wg.Done()
 			} else if SongObj, ok := action["delete_song"]; ok {
-				delete_song(client, SongObj, client_id)
+				delete_song(client, SongObj.([]pb.SongObj), client_id)
+				wg.Done()
+			} else if SongQuery, ok := action["filter_songs"]; ok {
+				filter_songs(client, SongQuery.(pb.SongQuery), client_id)
 				wg.Done()
 			}
 		}
@@ -264,9 +334,9 @@ func main() {
 	}()
 
 	// Start Client that wait for  action
-	list_of_chan := make([]chan map[string][]pb.SongObj, 0)
+	list_of_chan := make([]chan map[string]interface{}, 0)
 	for i := 0; i < *number_of_client; i++ {
-		map_chan := make(chan map[string][]pb.SongObj)
+		map_chan := make(chan map[string]interface{})
 		list_of_chan = append(list_of_chan, map_chan)
 		go start_client(i, map_chan, &wg)
 	}
@@ -311,6 +381,10 @@ func main() {
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO get_song with 1 SongObj")
 	motivate("get_song", list_of_chan, &wg, []pb.SongObj{{Id: "1"}})
+
+	// send filter_songs with 1 SongObj id to client channel
+	grpclog.Println("MAIN: CALL TO filter_songs with SongQuery")
+	motivate("filter_songs", list_of_chan, &wg, pb.SongQuery{Search: "KNOB", SearchType: 2, SearchField: 1})
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO delete_song with 1 SongObj")

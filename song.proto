@@ -16,7 +16,7 @@ service SongSrv {
   rpc Modify (SongObj) returns (SongResponce) {}
   rpc Delete (SongObj) returns (SongResponce) {}
   rpc Get (SongObj) returns (SongObj) {}
-  //rpc Filter (SongQuery) returns (stream SongObj) {}
+  rpc Filter (SongQuery) returns (stream SongObj) {}
 }
 
 // The request message containing the user's name.
@@ -116,10 +116,9 @@ message SongQuery {
     }
     SearchType search_type = 2;
     enum SearchFiled {
-        Name = 0;
-        Title = 2;
-        Atrists = 3;
-        Album = 4;
+        Title = 0;
+        Artist = 1;
+        Album = 2;
     }
     SearchFiled search_field = 3;
 }
