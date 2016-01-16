@@ -384,7 +384,7 @@ func main() {
 
 	// send filter_songs with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO filter_songs with SongQuery")
-	motivate("filter_songs", list_of_chan, &wg, pb.SongQuery{Search: "KNOB", SearchType: 2, SearchField: 1})
+	motivate("filter_songs", list_of_chan, &wg, pb.SongQuery{Search: "KN", SearchType: 2, SearchField: 1})
 
 	// send get_song with 1 SongObj id to client channel
 	grpclog.Println("MAIN: CALL TO delete_song with 1 SongObj")
