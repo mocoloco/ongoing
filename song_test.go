@@ -1,4 +1,4 @@
-package main
+package song_test
 
 import (
 	"flag"
@@ -9,8 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"testing"
 
-	pb "./proto"
+	pb "."
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -316,7 +317,7 @@ func start_client(client_id int, map_cahn chan map[string]interface{}, wg *sync.
 
 }
 
-func main() {
+func TestMain(m *testing.M) {
 
 	flag.Parse()
 	var wg sync.WaitGroup
